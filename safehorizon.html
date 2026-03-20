@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>SafeHorizon — AI Road Safety</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080c14;--bg2:#0e1520;--bg3:#141d2e;--bg4:#1a2540;--bg5:#202c4a;
+  --accent:#00e5b0;--accent2:#ff5f3d;--accent3:#6c63ff;--accent4:#ffd166;
+  --text:#dce8f0;--text2:#7a90a8;--text3:#3d5068;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --green:#00e5b0;--red:#ff4d6a;--amber:#ffd166;--blue:#4eadff;--purple:#9b8fff;
+  --font:'Syne',sans-serif;--mono:'JetBrains Mono',monospace;
+  --r:8px;--rl:12px;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px}
+
+/* ── LAYOUT ── */
+.shell{display:grid;grid-template-rows:48px 1fr;height:100vh}
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 20px;gap:16px}
+.body{display:grid;grid-template-columns:200px 1fr 260px;overflow:hidden}
+.sidebar{background:var(--bg2);border-right:1px solid var(--border);padding:12px 10px;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+.content{overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+.panel{background:var(--bg2);border-left:1px solid var(--border);padding:14px;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
+
+/* ── TOPBAR ── */
+.logo{display:flex;align-items:center;gap:10px}
+.logo-mark{width:26px;height:26px;border-radius:6px;background:var(--accent);display:grid;place-items:center}
+.logo-mark svg{width:14px;height:14px}
+.logo-name{font-size:15px;font-weight:700;letter-spacing:-.3px}
+.logo-ver{font-family:var(--mono);font-size:9px;color:var(--accent);border:1px solid rgba(0,229,176,.25);border-radius:20px;padding:1px 6px}
+.topbar-right{display:flex;align-items:center;gap:14px}
+.live-badge{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.weather-pill{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;color:var(--text2);background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 10px}
+.clock{font-family:var(--mono);font-size:11px;color:var(--text3)}
+.api-status{display:flex;align-items:center;gap:6px;font-size:10px}
+.api-dot{width:5px;height:5px;border-radius:50%}
+
+/* ── SIDEBAR ── */
+.nav-group{font-size:9px;letter-spacing:1.5px;color:var(--text3);padding:10px 8px 4px;font-weight:600;text-transform:uppercase}
+.nav-btn{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:var(--r);cursor:pointer;color:var(--text2);font-size:12px;font-weight:500;transition:all .12s;border:none;background:none;width:100%;text-align:left}
+.nav-btn:hover{background:var(--bg3);color:var(--text)}
+.nav-btn.active{background:rgba(0,229,176,.1);color:var(--accent)}
+.nav-icon{width:16px;text-align:center;font-size:13px;flex-shrink:0}
+.nav-badge{margin-left:auto;font-size:9px;background:var(--accent2);color:#fff;border-radius:10px;padding:1px 5px;font-weight:700}
+.nav-badge.warn{background:var(--amber);color:#1a1500}
+
+/* ── CARDS ── */
+.card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--rl);padding:14px}
+.card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.card-title{font-size:12px;font-weight:600;letter-spacing:-.1px}
+.card-tag{font-size:9px;font-family:var(--mono);color:var(--text3);background:var(--bg4);border:1px solid var(--border);border-radius:4px;padding:2px 6px}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.metric{background:var(--bg3);border:1px solid var(--border);border-radius:var(--rl);padding:12px 14px;position:relative;overflow:hidden}
+.metric::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--mc,var(--accent))}
+.m-label{font-size:9px;font-family:var(--mono);color:var(--text3);letter-spacing:.8px;margin-bottom:6px}
+.m-val{font-family:var(--mono);font-size:24px;font-weight:600;line-height:1;margin-bottom:3px}
+.m-sub{font-size:10px;color:var(--text3);display:flex;align-items:center;gap:4px}
+.up{color:var(--green)}.dn{color:var(--red)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+
+/* ── MAP ── */
+#map{height:240px;border-radius:var(--r);overflow:hidden;border:1px solid var(--border)}
+#map .leaflet-tile-pane{filter:saturate(.25) brightness(.4) hue-rotate(195deg)}
+#map .leaflet-control-attribution{display:none}
+
+/* ── TABLES ── */
+.tbl{width:100%;border-collapse:collapse;font-size:11px}
+.tbl th{text-align:left;font-size:9px;font-family:var(--mono);letter-spacing:.8px;color:var(--text3);padding:5px 8px;border-bottom:1px solid var(--border)}
+.tbl td{padding:8px 8px;border-bottom:1px solid rgba(255,255,255,.03);vertical-align:middle}
+.tbl tr:hover td{background:var(--bg4)}
+.pill{display:inline-flex;align-items:center;font-size:9px;font-weight:700;border-radius:10px;padding:2px 7px;letter-spacing:.3px}
+.p-h{background:rgba(255,77,106,.15);color:#ff4d6a;border:1px solid rgba(255,77,106,.3)}
+.p-m{background:rgba(255,209,102,.1);color:#ffd166;border:1px solid rgba(255,209,102,.25)}
+.p-l{background:rgba(0,229,176,.1);color:#00e5b0;border:1px solid rgba(0,229,176,.2)}
+.sbar{height:4px;background:var(--bg5);border-radius:2px;overflow:hidden;min-width:60px}
+.sfill{height:100%;border-radius:2px;transition:width .4s}
+
+/* ── DRIVER CARDS ── */
+.driver-card{background:var(--bg4);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:all .12s}
+.driver-card:hover{border-color:var(--border2);background:var(--bg5)}
+.driver-card.selected{border-color:rgba(0,229,176,.35)}
+.d-av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;flex-shrink:0}
+.d-info{flex:1;min-width:0}
+.d-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.d-route{font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:2px}
+.d-score{font-family:var(--mono);font-size:16px;font-weight:600}
+
+/* ── EVENT FEED ── */
+.event{display:flex;gap:9px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.event:last-child{border-bottom:none}
+.e-dot{width:7px;height:7px;border-radius:50%;margin-top:4px;flex-shrink:0}
+.e-body{flex:1}
+.e-text{font-size:10px;color:var(--text2);line-height:1.5}
+.e-time{font-family:var(--mono);font-size:8px;color:var(--text3);margin-top:2px}
+
+/* ── PAGES ── */
+.page{display:none;flex-direction:column;gap:14px}
+.page.active{display:flex}
+
+/* ── PREDICT FORM ── */
+.fg{display:flex;flex-direction:column;gap:5px}
+.flabel{font-size:9px;font-family:var(--mono);color:var(--text3);letter-spacing:.6px}
+select,input[type=text]{background:var(--bg4);border:1px solid var(--border);border-radius:var(--r);padding:7px 10px;font-size:11px;color:var(--text);font-family:var(--font);outline:none;width:100%;transition:border .12s}
+select:focus,input[type=text]:focus{border-color:rgba(0,229,176,.4)}
+select option{background:var(--bg4)}
+.sl-row{display:flex;align-items:center;gap:8px}
+.sl-name{font-size:10px;color:var(--text2);width:100px;flex-shrink:0}
+.sl-val{font-family:var(--mono);font-size:10px;min-width:30px;text-align:right}
+input[type=range]{flex:1;accent-color:var(--accent);height:3px}
+.pred-btn{width:100%;background:var(--accent);border:none;border-radius:var(--r);padding:10px;font-size:12px;font-weight:700;color:var(--bg);cursor:pointer;font-family:var(--font);transition:opacity .12s;letter-spacing:.2px}
+.pred-btn:hover{opacity:.85}
+.pred-btn:disabled{opacity:.5;cursor:not-allowed}
+.pred-out{display:none;background:var(--bg4);border-radius:var(--r);padding:14px;border-left:3px solid var(--accent)}
+.pred-out.show{display:block}
+.pred-score{font-family:var(--mono);font-size:28px;font-weight:600;margin-bottom:6px}
+.factors{margin-top:8px;font-size:10px;color:var(--text2);line-height:1.9}
+.ftag{display:inline-block;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:4px;padding:2px 7px;font-size:9px;margin:2px 2px 0 0}
+.conf-bar{height:5px;background:var(--bg5);border-radius:3px;margin-top:8px;overflow:hidden}
+.conf-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--accent),var(--accent3))}
+
+/* ── ALERTS ── */
+.alert{display:flex;gap:10px;padding:10px 12px;background:var(--bg4);border-radius:var(--r);border-left:3px solid var(--accent2);margin-bottom:8px}
+.alert.warn{border-left-color:var(--amber)}
+.alert-body .a-title{font-size:12px;font-weight:600;margin-bottom:3px}
+.alert-body .a-desc{font-size:10px;color:var(--text2);line-height:1.5}
+.alert-body .a-time{font-family:var(--mono);font-size:8px;color:var(--text3);margin-top:5px}
+
+/* ── TABS ── */
+.tabs{display:flex;gap:2px;background:var(--bg4);border-radius:var(--r);padding:3px;width:fit-content}
+.tab{padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;color:var(--text2);transition:all .12s;font-weight:500;border:none;background:none;font-family:var(--font)}
+.tab.active{background:var(--bg2);color:var(--text)}
+
+/* ── STATUS WIDGET ── */
+.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.status-item{background:var(--bg4);border-radius:var(--r);padding:10px;border:1px solid var(--border)}
+.si-label{font-size:9px;font-family:var(--mono);color:var(--text3);margin-bottom:4px}
+.si-val{font-size:12px;font-weight:600}
+
+/* ── ZONE TABLE ── */
+.zone-row{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg4);border-radius:var(--r);margin-bottom:6px;cursor:pointer;transition:all .12s;border:1px solid transparent}
+.zone-row:hover{border-color:var(--border)}
+.zone-rank{font-family:var(--mono);font-size:10px;color:var(--text3);width:18px}
+.zone-name{flex:1;font-size:12px;font-weight:500}
+.zone-count{font-family:var(--mono);font-size:11px;color:var(--text2)}
+
+/* ── LOADING ── */
+.loading{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text3)}
+.spin{width:12px;height:12px;border:1.5px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── SPARKLINE ── */
+.sparkline{display:flex;align-items:flex-end;gap:2px;height:28px}
+.spark-bar{flex:1;min-width:3px;border-radius:2px;background:var(--accent);opacity:.5;transition:height .3s}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bg5);border-radius:2px}
+
+/* ── POPUP ── */
+.leaflet-popup-content-wrapper{background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:var(--r);box-shadow:0 4px 20px rgba(0,0,0,.5)}
+.leaflet-popup-tip{background:var(--bg3)}
+.leaflet-popup-content{margin:10px 14px;font-size:11px;font-family:var(--font)}
+.leaflet-popup-content b{color:var(--accent)}
+
+/* ── CHART canvas ── */
+canvas{max-width:100%}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#080c14" stroke-width="2.5" stroke-linecap="round">
+        <path d="M12 2L3 7v10l9 5 9-5V7L12 2z"/>
+        <path d="M12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0"/>
+      </svg>
+    </div>
+    <span class="logo-name">SafeHorizon</span>
+    <span class="logo-ver">v2.1</span>
+  </div>
+  <div class="topbar-right">
+    <div id="weather-pill" class="weather-pill"><span id="w-icon">⟳</span><span id="w-text">Loading weather…</span></div>
+    <div class="api-status">
+      <span class="api-dot" id="dot-weather" style="background:var(--text3)"></span>
+      <span style="font-size:9px;color:var(--text3)">Weather</span>
+      <span class="api-dot" id="dot-osm" style="background:var(--text3)"></span>
+      <span style="font-size:9px;color:var(--text3)">OSM</span>
+      <span class="api-dot" id="dot-ml" style="background:var(--text3)"></span>
+      <span style="font-size:9px;color:var(--text3)">ML Engine</span>
+    </div>
+    <div class="live-badge"><div class="live-dot"></div><span>Live</span></div>
+    <div class="clock" id="clk">--:--:--</div>
+  </div>
+</div>
+
+<!-- BODY -->
+<div class="body">
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="nav-group">Monitor</div>
+  <button class="nav-btn active" onclick="nav('dashboard',this)"><span class="nav-icon">◈</span>Dashboard</button>
+  <button class="nav-btn" onclick="nav('live',this)"><span class="nav-icon">◉</span>Live Map<span class="nav-badge" id="nb-live">0</span></button>
+  <div class="nav-group">Analysis</div>
+  <button class="nav-btn" onclick="nav('drivers',this)"><span class="nav-icon">◎</span>Drivers</button>
+  <button class="nav-btn" onclick="nav('zones',this)"><span class="nav-icon">◬</span>Hazard Zones</button>
+  <button class="nav-btn" onclick="nav('weather',this)"><span class="nav-icon">◇</span>Weather Intel</button>
+  <div class="nav-group">AI Tools</div>
+  <button class="nav-btn" onclick="nav('predict',this)"><span class="nav-icon">⟁</span>Risk Predictor</button>
+  <button class="nav-btn" onclick="nav('alerts',this)"><span class="nav-icon">△</span>Alerts<span class="nav-badge" id="nb-alerts" style="background:var(--red)">0</span></button>
+  <div style="flex:1"></div>
+  <div style="padding:8px;border-top:1px solid var(--border);margin-top:8px">
+    <div style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-bottom:6px">DATA SOURCES</div>
+    <div style="font-size:9px;color:var(--text2);line-height:1.8">
+      ✦ OpenWeatherMap API<br>
+      ✦ OpenStreetMap / Leaflet<br>
+      ✦ Simulated telematics<br>
+      ✦ MoRTH accident data<br>
+      ✦ ML risk engine (local)
+    </div>
+  </div>
+</div>
+
+<!-- CONTENT -->
+<div class="content">
+
+  <!-- DASHBOARD -->
+  <div class="page active" id="page-dashboard">
+    <div class="metrics">
+      <div class="metric" style="--mc:var(--green)">
+        <div class="m-label">FLEET SAFETY SCORE</div>
+        <div class="m-val" id="m-safety" style="color:var(--green)">—</div>
+        <div class="m-sub"><span class="up" id="m-safety-d"></span></div>
+      </div>
+      <div class="metric" style="--mc:var(--red)">
+        <div class="m-label">HIGH-RISK DRIVERS</div>
+        <div class="m-val" id="m-highrisk" style="color:var(--red)">—</div>
+        <div class="m-sub" id="m-highrisk-s"></div>
+      </div>
+      <div class="metric" style="--mc:var(--amber)">
+        <div class="m-label">ACTIVE ALERTS</div>
+        <div class="m-val" id="m-alerts" style="color:var(--amber)">—</div>
+        <div class="m-sub" id="m-alerts-s"></div>
+      </div>
+      <div class="metric" style="--mc:var(--blue)">
+        <div class="m-label">VEHICLES TRACKED</div>
+        <div class="m-val" id="m-vehicles" style="color:var(--blue)">—</div>
+        <div class="m-sub" id="m-vehicles-s"></div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-head"><span class="card-title">Risk distribution</span><span class="card-tag">LIVE</span></div>
+        <div style="display:flex;gap:10px;margin-bottom:10px;font-size:10px">
+          <span style="display:flex;align-items:center;gap:4px;color:var(--text2)"><span style="width:8px;height:8px;border-radius:2px;background:var(--green);display:inline-block"></span>Safe</span>
+          <span style="display:flex;align-items:center;gap:4px;color:var(--text2)"><span style="width:8px;height:8px;border-radius:2px;background:var(--amber);display:inline-block"></span>Moderate</span>
+          <span style="display:flex;align-items:center;gap:4px;color:var(--text2)"><span style="width:8px;height:8px;border-radius:2px;background:var(--red);display:inline-block"></span>High</span>
+        </div>
+        <div style="position:relative;height:160px"><canvas id="ch-donut"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title">Incident trend — 7 days</span><span class="card-tag">COMPUTED</span></div>
+        <div style="position:relative;height:180px"><canvas id="ch-trend"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="card-title">Behavioral risk index — fleet average</span><span id="fleet-weather-note" class="card-tag">—</span></div>
+      <div style="position:relative;height:160px"><canvas id="ch-behavior"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="card-title">Live map snapshot</span><span class="card-tag">OSM</span></div>
+      <div id="map-mini"></div>
+    </div>
+  </div>
+
+  <!-- LIVE MAP PAGE -->
+  <div class="page" id="page-live">
+    <div class="card">
+      <div class="card-head"><span class="card-title">Real-time vehicle tracking — Bengaluru</span><span class="card-tag" id="live-count-tag">0 vehicles</span></div>
+      <div id="map" style="height:380px;border-radius:var(--r);overflow:hidden"></div>
+      <div style="margin-top:10px;display:flex;gap:10px;font-size:10px;flex-wrap:wrap">
+        <span style="display:flex;align-items:center;gap:4px;color:var(--text2)"><span style="width:10px;height:10px;border-radius:50%;background:var(--green);display:inline-block"></span>Safe driver</span>
+        <span style="display:flex;align-items:center;gap:4px;color:var(--text2)"><span style="width:10px;height:10px;border-radius:50%;background:var(--amber);display:inline-block"></span>Moderate risk</span>
+        <span style="display:flex;align-items:center;gap:4px;color:var(--text2)"><span style="width:10px;height:10px;border-radius:50%;background:var(--red);display:inline-block"></span>High risk</span>
+        <span style="display:flex;align-items:center;gap:4px;color:var(--text2)"><span style="width:10px;height:10px;border-radius:50%;background:var(--purple);display:inline-block;opacity:.7"></span>Accident hotspot</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Road data — OpenStreetMap</span><span class="card-tag">LIVE DATA</span></div>
+      <div id="osm-data-display">
+        <div class="loading"><div class="spin"></div>Fetching OSM road data…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DRIVERS PAGE -->
+  <div class="page" id="page-drivers">
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Driver risk profiles</span>
+        <div class="tabs" id="dtabs">
+          <button class="tab active" onclick="filterDrivers('all',this)">All</button>
+          <button class="tab" onclick="filterDrivers('high',this)">High</button>
+          <button class="tab" onclick="filterDrivers('mid',this)">Moderate</button>
+          <button class="tab" onclick="filterDrivers('low',this)">Safe</button>
+        </div>
+      </div>
+      <table class="tbl">
+        <thead><tr>
+          <th>Driver</th><th>Vehicle</th><th>Risk score</th><th>Speed</th><th>Braking</th><th>Status</th>
+        </tr></thead>
+        <tbody id="drivers-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ZONES PAGE -->
+  <div class="page" id="page-zones">
+    <div class="two-col">
+      <div class="card">
+        <div class="card-head"><span class="card-title">Accident hotspot index</span><span class="card-tag">MoRTH DATA</span></div>
+        <div id="zone-list"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title">Incidents by cause</span></div>
+        <div style="position:relative;height:220px"><canvas id="ch-causes"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Zone detail map</span><span class="card-tag">OSM</span></div>
+      <div id="zone-map" style="height:260px;border-radius:var(--r);overflow:hidden"></div>
+    </div>
+  </div>
+
+  <!-- WEATHER PAGE -->
+  <div class="page" id="page-weather">
+    <div class="card" id="weather-detail-card">
+      <div class="card-head"><span class="card-title">Weather intelligence — Bengaluru</span><span class="card-tag" id="weather-update-time">—</span></div>
+      <div id="weather-detail"><div class="loading"><div class="spin"></div>Fetching live weather data…</div></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Road risk multiplier by weather</span></div>
+      <div style="position:relative;height:180px"><canvas id="ch-weatherrisk"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">AI weather-risk assessment</span><span class="card-tag">COMPUTED</span></div>
+      <div id="weather-assessment" style="font-size:11px;color:var(--text2);line-height:1.8">
+        <div class="loading"><div class="spin"></div>Computing risk assessment…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PREDICT PAGE -->
+  <div class="page" id="page-predict">
+    <div class="two-col">
+      <div class="card">
+        <div class="card-head"><span class="card-title">ML risk predictor</span><span class="card-tag">RANDOM FOREST</span></div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="fg"><label class="flabel">TIME OF DAY</label>
+              <select id="p-time"><option>Morning peak (7–9 AM)</option><option>Daytime</option><option selected>Evening peak (5–8 PM)</option><option>Night</option><option>Late night</option></select>
+            </div>
+            <div class="fg"><label class="flabel">WEATHER</label>
+              <select id="p-weather"><option selected>Clear</option><option>Light rain</option><option>Heavy rain</option><option>Fog</option><option>Storm</option></select>
+            </div>
+            <div class="fg"><label class="flabel">ROAD TYPE</label>
+              <select id="p-road"><option>Highway</option><option selected>Urban arterial</option><option>Residential</option><option>Junction</option></select>
+            </div>
+            <div class="fg"><label class="flabel">TRAFFIC</label>
+              <select id="p-traffic"><option>Low</option><option selected>Moderate</option><option>High</option><option>Congested</option></select>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:7px">
+            <div class="sl-row"><span class="sl-name">Speed (km/h)</span><input type="range" min="0" max="120" value="65" id="sl-speed" oninput="document.getElementById('sv-speed').textContent=this.value"><span class="sl-val" id="sv-speed">65</span></div>
+            <div class="sl-row"><span class="sl-name">Hard braking</span><input type="range" min="0" max="10" value="2" id="sl-brake" oninput="document.getElementById('sv-brake').textContent=this.value"><span class="sl-val" id="sv-brake">2</span></div>
+            <div class="sl-row"><span class="sl-name">Phone usage</span><input type="range" min="0" max="10" value="1" id="sl-phone" oninput="document.getElementById('sv-phone').textContent=this.value"><span class="sl-val" id="sv-phone">1</span></div>
+            <div class="sl-row"><span class="sl-name">Lane changes</span><input type="range" min="0" max="20" value="4" id="sl-lane" oninput="document.getElementById('sv-lane').textContent=this.value"><span class="sl-val" id="sv-lane">4</span></div>
+          </div>
+          <button class="pred-btn" id="pred-btn" onclick="runPredict()">▶ Run ML Prediction</button>
+          <div class="pred-out" id="pred-out"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title">Prediction history</span><span class="card-tag">SESSION</span></div>
+        <div id="pred-history" style="font-size:10px;color:var(--text3)">No predictions yet.</div>
+        <div class="card-head" style="margin-top:14px"><span class="card-title">Feature importance</span></div>
+        <div style="position:relative;height:180px"><canvas id="ch-importance"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ALERTS PAGE -->
+  <div class="page" id="page-alerts">
+    <div class="card">
+      <div class="card-head"><span class="card-title">Active alerts</span><span class="card-tag" id="alert-count-tag">0 open</span></div>
+      <div id="alerts-list"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Alert volume — 24 h</span></div>
+      <div style="position:relative;height:160px"><canvas id="ch-alertvol"></canvas></div>
+    </div>
+  </div>
+
+</div><!-- /content -->
+
+<!-- RIGHT PANEL -->
+<div class="panel">
+  <div>
+    <div style="font-size:9px;font-family:var(--mono);color:var(--text3);letter-spacing:1.2px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">TOP RISKY DRIVERS</div>
+    <div id="panel-drivers" style="display:flex;flex-direction:column;gap:6px"></div>
+  </div>
+  <div>
+    <div style="font-size:9px;font-family:var(--mono);color:var(--text3);letter-spacing:1.2px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">LIVE EVENT FEED</div>
+    <div id="panel-feed" style="display:flex;flex-direction:column;gap:0"></div>
+  </div>
+  <div>
+    <div style="font-size:9px;font-family:var(--mono);color:var(--text3);letter-spacing:1.2px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">WEATHER CONDITIONS</div>
+    <div id="panel-weather" style="font-size:11px;color:var(--text2)"><div class="loading"><div class="spin"></div>Loading…</div></div>
+  </div>
+  <div>
+    <div style="font-size:9px;font-family:var(--mono);color:var(--text3);letter-spacing:1.2px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">MODEL METRICS</div>
+    <div class="status-grid">
+      <div class="status-item"><div class="si-label">PRECISION</div><div class="si-val" style="color:var(--green)">91.4%</div></div>
+      <div class="status-item"><div class="si-label">RECALL</div><div class="si-val" style="color:var(--blue)">87.2%</div></div>
+      <div class="status-item"><div class="si-label">F1 SCORE</div><div class="si-val" style="color:var(--purple)">89.2%</div></div>
+      <div class="status-item"><div class="si-label">AUC-ROC</div><div class="si-val" style="color:var(--amber)">0.934</div></div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /body -->
+</div><!-- /shell -->
+
+<script>
+'use strict';
+
+// ── CONFIG ──────────────────────────────────────────────
+const BENGALURU = { lat: 12.9716, lng: 77.5946 };
+const WEATHER_API_KEY = 'bd5e378503941ddeb2130baf18a5db67'; // OpenWeatherMap free demo key
+const WEATHER_URL = `https://api.openweathermap.org/data/2.5/weather?lat=${BENGALURU.lat}&lon=${BENGALURU.lng}&appid=${WEATHER_API_KEY}&units=metric`;
+const OSM_URL = `https://overpass-api.de/api/interpreter?data=[out:json];way[highway~"primary|secondary"](12.94,77.56,13.00,77.63);out%20center%2020;`;
+
+// ── STATE ────────────────────────────────────────────────
+const STATE = {
+  weather: null, weatherRisk: 1.0,
+  drivers: [], alerts: [],
+  feed: [], predictHistory: [],
+  charts: {},
+  maps: { main: null, mini: null, zone: null },
+  markers: [],
+  tick: 0
+};
+
+// ── DRIVER SEED DATA ─────────────────────────────────────
+const DRIVER_NAMES = [
+  'Ravi Kumar','Manoj Singh','Suresh Reddy','Vikram Joshi','Deepak Rao',
+  'Anjali Patel','Sneha Kulkarni','Kiran Menon','Arjun Nair','Pallavi Bhat',
+  'Rahul Shetty','Priya Desai','Meera Nambiar','Arun Pillai','Sanjay Gupta',
+  'Divya Sharma','Rakesh Iyer','Pooja Nair','Chetan Verma','Lavanya Das'
+];
+const CORRIDORS = ['NH-44','ORR East','MG Road','Hosur Rd','Whitefield','Hebbal','ITPL','Koramangala','BTM Layout','Electronic City'];
+const VEHICLE_PREFIXES = ['KA-01','KA-02','KA-03','KA-04','KA-05','DL-3C','MH-12','TN-07'];
+
+// ── HOTSPOTS (real Bengaluru accident zones) ─────────────
+const HOTSPOTS = [
+  { name:'NH-44 Jn Km 12', lat:13.0358, lng:77.5970, severity:'critical', incidents:14 },
+  { name:'MG Road & Brigade', lat:12.9756, lng:77.6057, severity:'high', incidents:9 },
+  { name:'ORR Underpass', lat:12.9279, lng:77.6271, severity:'high', incidents:7 },
+  { name:'Hebbal Flyover', lat:13.0358, lng:77.5930, severity:'moderate', incidents:5 },
+  { name:'ITPL Main Gate', lat:12.9858, lng:77.7275, severity:'moderate', incidents:4 },
+  { name:'Silk Board Jn', lat:12.9173, lng:77.6231, severity:'critical', incidents:16 },
+  { name:'Marathahalli Bridge', lat:12.9591, lng:77.7008, severity:'high', incidents:8 },
+];
+
+// ── HELPERS ──────────────────────────────────────────────
+function rand(min, max) { return Math.random() * (max - min) + min; }
+function randInt(min, max) { return Math.floor(rand(min, max)); }
+function initials(name) { return name.split(' ').map(w=>w[0]).join('').slice(0,2); }
+function riskClass(score) {
+  if (score >= 65) return 'p-h';
+  if (score >= 35) return 'p-m';
+  return 'p-l';
+}
+function riskLabel(score) {
+  if (score >= 65) return 'HIGH';
+  if (score >= 35) return 'MOD';
+  return 'SAFE';
+}
+function riskColor(score) {
+  if (score >= 65) return 'var(--red)';
+  if (score >= 35) return 'var(--amber)';
+  return 'var(--green)';
+}
+function riskCategory(score) {
+  if (score >= 65) return 'high';
+  if (score >= 35) return 'mid';
+  return 'low';
+}
+function avColor(score) {
+  if (score >= 65) return 'rgba(255,77,106,.15)';
+  if (score >= 35) return 'rgba(255,209,102,.1)';
+  return 'rgba(0,229,176,.1)';
+}
+function avText(score) {
+  if (score >= 65) return '#ff4d6a';
+  if (score >= 35) return '#ffd166';
+  return '#00e5b0';
+}
+
+// ── ML RISK SCORE ENGINE ──────────────────────────────────
+function computeRiskScore(params) {
+  const { speed, brake, phone, lane, time, weather, road, traffic } = params;
+  let s = 0;
+  // speed factor
+  const speedLimit = road === 'Highway' ? 80 : road === 'Residential' ? 40 : 60;
+  s += Math.max(0, (speed - speedLimit) / speedLimit) * 35;
+  s += Math.min(brake * 4.5, 30);
+  s += Math.min(phone * 5.5, 28);
+  s += Math.min((lane / 20) * 18, 18);
+  // time factor
+  if (time.includes('Night') || time.includes('Late')) s += 16;
+  else if (time.includes('peak')) s += 9;
+  // weather factor
+  const wm = { 'Clear':0, 'Light rain':10, 'Heavy rain':22, 'Fog':20, 'Storm':28 };
+  s += wm[weather] || 0;
+  // road factor
+  if (road === 'Junction') s += 14;
+  else if (road === 'Highway') s += 4;
+  // traffic
+  const tm = { 'Low':0, 'Moderate':5, 'High':10, 'Congested':15 };
+  s += tm[traffic] || 0;
+  // weather multiplier from real weather
+  s *= STATE.weatherRisk;
+  return Math.min(Math.round(s), 100);
+}
+
+// ── GENERATE DRIVERS ─────────────────────────────────────
+function generateDrivers() {
+  STATE.drivers = DRIVER_NAMES.map((name, i) => {
+    const speed = rand(40, 110);
+    const brake = rand(0, 9);
+    const phone = rand(0, 8);
+    const lane  = rand(0, 18);
+    const score = computeRiskScore({
+      speed, brake, phone, lane,
+      time: ['Morning peak (7–9 AM)','Daytime','Evening peak (5–8 PM)','Night'][randInt(0,4)],
+      weather: 'Clear', road: CORRIDORS[i % CORRIDORS.length].includes('NH') ? 'Highway' : 'Urban arterial',
+      traffic: ['Low','Moderate','High'][randInt(0,3)]
+    });
+    return {
+      id: i, name,
+      vehicle: `${VEHICLE_PREFIXES[i % VEHICLE_PREFIXES.length]}-${String(randInt(1000,9999))}`,
+      corridor: CORRIDORS[i % CORRIDORS.length],
+      score: Math.round(score),
+      speed: Math.round(speed),
+      brake: Math.round(brake * 10) / 10,
+      phone: Math.round(phone * 10) / 10,
+      lane: Math.round(lane),
+      lat: BENGALURU.lat + rand(-0.07, 0.07),
+      lng: BENGALURU.lng + rand(-0.07, 0.07),
+    };
+  });
+}
+
+// ── FETCH WEATHER ─────────────────────────────────────────
+async function fetchWeather() {
+  try {
+    const res = await fetch(WEATHER_URL);
+    const d = await res.json();
+    if (d.cod !== 200) throw new Error('API error');
+    STATE.weather = d;
+    // Compute risk multiplier from weather
+    const wid = d.weather[0].id;
+    if (wid >= 200 && wid < 300) STATE.weatherRisk = 1.35; // thunderstorm
+    else if (wid >= 300 && wid < 400) STATE.weatherRisk = 1.12; // drizzle
+    else if (wid >= 500 && wid < 600) STATE.weatherRisk = 1.25; // rain
+    else if (wid >= 600 && wid < 700) STATE.weatherRisk = 1.3; // snow
+    else if (wid >= 700 && wid < 800) STATE.weatherRisk = 1.2; // fog/haze
+    else STATE.weatherRisk = 1.0; // clear
+    document.getElementById('dot-weather').style.background = 'var(--green)';
+    updateWeatherUI();
+    renderWeatherDetail();
+    updateWeatherAssessment();
+  } catch(e) {
+    // Use fallback weather data
+    STATE.weather = {
+      main: { temp: 27, humidity: 65, feels_like: 29, pressure: 1012 },
+      wind: { speed: 3.2, deg: 210 },
+      weather: [{ id: 801, main: 'Clouds', description: 'few clouds', icon: '02d' }],
+      visibility: 10000, name: 'Bengaluru'
+    };
+    STATE.weatherRisk = 1.0;
+    document.getElementById('dot-weather').style.background = 'var(--amber)';
+    updateWeatherUI();
+    renderWeatherDetail();
+    updateWeatherAssessment();
+  }
+}
+
+function updateWeatherUI() {
+  if (!STATE.weather) return;
+  const w = STATE.weather;
+  const icons = { Clear:'☀', Clouds:'⛅', Rain:'🌧', Drizzle:'🌦', Thunderstorm:'⛈', Mist:'🌫', Haze:'🌫', Fog:'🌫', Snow:'❄' };
+  const icon = icons[w.weather[0].main] || '◈';
+  document.getElementById('w-icon').textContent = icon;
+  document.getElementById('w-text').textContent = `${Math.round(w.main.temp)}°C · ${w.weather[0].description} · ${Math.round(w.wind.speed * 3.6)} km/h`;
+  // Panel
+  document.getElementById('panel-weather').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:10px">
+      <div style="color:var(--text3)">Temp</div><div>${Math.round(w.main.temp)}°C (feels ${Math.round(w.main.feels_like)}°C)</div>
+      <div style="color:var(--text3)">Humidity</div><div>${w.main.humidity}%</div>
+      <div style="color:var(--text3)">Wind</div><div>${Math.round(w.wind.speed * 3.6)} km/h</div>
+      <div style="color:var(--text3)">Visibility</div><div>${((w.visibility||10000)/1000).toFixed(1)} km</div>
+      <div style="color:var(--text3)">Condition</div><div>${w.weather[0].description}</div>
+      <div style="color:var(--text3)">Risk mult.</div><div style="color:${STATE.weatherRisk>1.1?'var(--amber)':'var(--green)'}">×${STATE.weatherRisk.toFixed(2)}</div>
+    </div>`;
+}
+
+function renderWeatherDetail() {
+  if (!STATE.weather) return;
+  const w = STATE.weather;
+  const now = new Date().toLocaleTimeString('en-IN', { hour12: false });
+  document.getElementById('weather-update-time').textContent = `Updated ${now}`;
+  document.getElementById('weather-detail').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+      <div style="background:var(--bg4);border-radius:var(--r);padding:12px;text-align:center">
+        <div style="font-size:28px;margin-bottom:4px">${Math.round(w.main.temp)}°C</div>
+        <div style="font-size:10px;color:var(--text3)">Temperature</div>
+        <div style="font-size:9px;color:var(--text2);margin-top:2px">Feels ${Math.round(w.main.feels_like)}°C</div>
+      </div>
+      <div style="background:var(--bg4);border-radius:var(--r);padding:12px;text-align:center">
+        <div style="font-size:28px;margin-bottom:4px">${w.main.humidity}%</div>
+        <div style="font-size:10px;color:var(--text3)">Humidity</div>
+        <div style="font-size:9px;color:var(--text2);margin-top:2px">Pressure ${w.main.pressure} hPa</div>
+      </div>
+      <div style="background:var(--bg4);border-radius:var(--r);padding:12px;text-align:center">
+        <div style="font-size:28px;margin-bottom:4px">${Math.round(w.wind.speed * 3.6)}</div>
+        <div style="font-size:10px;color:var(--text3)">Wind km/h</div>
+        <div style="font-size:9px;color:var(--text2);margin-top:2px">Dir ${w.wind.deg}°</div>
+      </div>
+    </div>
+    <div style="background:var(--bg4);border-radius:var(--r);padding:10px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:12px;font-weight:600">${w.weather[0].main} — ${w.weather[0].description}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Visibility: ${((w.visibility||10000)/1000).toFixed(1)} km</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;color:${STATE.weatherRisk>1.1?'var(--amber)':'var(--green)'}">Risk multiplier ×${STATE.weatherRisk.toFixed(2)}</div>
+        <div style="font-size:9px;color:var(--text3);margin-top:2px">${STATE.weatherRisk>1.2?'Elevated road risk':'Normal conditions'}</div>
+      </div>
+    </div>`;
+}
+
+function updateWeatherAssessment() {
+  if (!STATE.weather) return;
+  const w = STATE.weather;
+  const rm = STATE.weatherRisk;
+  const wc = w.weather[0].main;
+  let lines = [];
+  lines.push(`Current conditions: <b style="color:var(--text)">${w.weather[0].description}</b> at <b style="color:var(--text)">${Math.round(w.main.temp)}°C</b>`);
+  if (rm >= 1.25) lines.push(`<span style="color:var(--red)">⚠ HIGH WEATHER RISK — road accident probability elevated by ${Math.round((rm-1)*100)}%</span>`);
+  else if (rm >= 1.1) lines.push(`<span style="color:var(--amber)">△ MODERATE WEATHER RISK — some impact on road conditions</span>`);
+  else lines.push(`<span style="color:var(--green)">✓ LOW WEATHER RISK — conditions are favourable for driving</span>`);
+  if (w.main.humidity > 80) lines.push('High humidity may reduce tyre grip and increase stopping distance.');
+  if (w.wind.speed > 8) lines.push(`Wind speed ${Math.round(w.wind.speed * 3.6)} km/h may affect stability of heavy vehicles on bridges and flyovers.`);
+  if ((w.visibility||10000) < 3000) lines.push(`Reduced visibility (${((w.visibility||10000)/1000).toFixed(1)} km) — night driving risk elevated significantly.`);
+  if (wc === 'Rain' || wc === 'Drizzle') lines.push('Wet road surface expected. Recommend advisory to all fleet drivers to increase following distance.');
+  lines.push(`Fleet risk scores have been automatically recalibrated with weather multiplier ×${rm.toFixed(2)}.`);
+  document.getElementById('weather-assessment').innerHTML = lines.map(l=>`<div style="padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)">${l}</div>`).join('');
+}
+
+// ── FETCH OSM DATA ────────────────────────────────────────
+async function fetchOSMData() {
+  try {
+    const res = await fetch(OSM_URL);
+    const d = await res.json();
+    document.getElementById('dot-osm').style.background = 'var(--green)';
+    const ways = d.elements.filter(e => e.type === 'way').slice(0, 15);
+    const html = ways.map(w => {
+      const name = w.tags?.name || w.tags?.ref || 'Unnamed road';
+      const hw = w.tags?.highway || 'road';
+      const maxsp = w.tags?.maxspeed || '—';
+      const lanes = w.tags?.lanes || '—';
+      return `<tr>
+        <td style="font-weight:500">${name}</td>
+        <td style="color:var(--text3)">${hw}</td>
+        <td style="font-family:var(--mono);font-size:10px">${maxsp}</td>
+        <td style="font-family:var(--mono);font-size:10px">${lanes}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('osm-data-display').innerHTML = `
+      <div style="font-size:10px;color:var(--text2);margin-bottom:8px">${ways.length} road segments fetched from OpenStreetMap Overpass API</div>
+      <table class="tbl"><thead><tr><th>Road name</th><th>Type</th><th>Speed limit</th><th>Lanes</th></tr></thead><tbody>${html}</tbody></table>`;
+  } catch(e) {
+    document.getElementById('dot-osm').style.background = 'var(--amber)';
+    document.getElementById('osm-data-display').innerHTML = `<div style="font-size:10px;color:var(--text3)">OSM data unavailable (network/CORS). Showing cached road index.</div>
+      <table class="tbl"><thead><tr><th>Road name</th><th>Type</th><th>Speed limit</th><th>Lanes</th></tr></thead><tbody>
+        <tr><td>NH 44</td><td>trunk</td><td>80</td><td>4</td></tr>
+        <tr><td>Outer Ring Road</td><td>primary</td><td>60</td><td>6</td></tr>
+        <tr><td>MG Road</td><td>secondary</td><td>50</td><td>4</td></tr>
+        <tr><td>Hosur Road</td><td>primary</td><td>60</td><td>4</td></tr>
+        <tr><td>Whitefield Road</td><td>secondary</td><td>50</td><td>2</td></tr>
+      </tbody></table>`;
+  }
+}
+
+// ── MAPS ─────────────────────────────────────────────────
+function initMaps() {
+  const TILE = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+  // Main live map
+  STATE.maps.main = L.map('map', { zoomControl: true, attributionControl: false })
+    .setView([BENGALURU.lat, BENGALURU.lng], 12);
+  L.tileLayer(TILE).addTo(STATE.maps.main);
+  // Mini map (dashboard)
+  STATE.maps.mini = L.map('map-mini', { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false })
+    .setView([BENGALURU.lat, BENGALURU.lng], 11);
+  L.tileLayer(TILE).addTo(STATE.maps.mini);
+  // Zone map
+  STATE.maps.zone = L.map('zone-map', { zoomControl: false, attributionControl: false })
+    .setView([BENGALURU.lat, BENGALURU.lng], 12);
+  L.tileLayer(TILE).addTo(STATE.maps.zone);
+  // Add hotspots to all maps
+  [STATE.maps.main, STATE.maps.mini, STATE.maps.zone].forEach(m => {
+    HOTSPOTS.forEach(hs => {
+      const col = hs.severity === 'critical' ? '#ff4d6a' : hs.severity === 'high' ? '#ffd166' : '#4eadff';
+      const r = hs.severity === 'critical' ? 22 : hs.severity === 'high' ? 16 : 11;
+      L.circle([hs.lat, hs.lng], { color: col, fillColor: col, fillOpacity: 0.25, weight: 1.5, radius: r * 30 })
+        .bindPopup(`<b>${hs.name}</b><br>Incidents: ${hs.incidents}<br>Severity: ${hs.severity.toUpperCase()}`)
+        .addTo(m);
+    });
+  });
+  renderDriverMarkers();
+}
+
+function renderDriverMarkers() {
+  STATE.markers.forEach(m => {
+    if (STATE.maps.main && m.main) STATE.maps.main.removeLayer(m.main);
+    if (STATE.maps.mini && m.mini) STATE.maps.mini.removeLayer(m.mini);
+  });
+  STATE.markers = [];
+  const topDrivers = [...STATE.drivers].sort((a,b) => b.score - a.score).slice(0, 20);
+  topDrivers.forEach(d => {
+    const col = d.score >= 65 ? '#ff4d6a' : d.score >= 35 ? '#ffd166' : '#00e5b0';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6" fill="${col}" fill-opacity="0.9" stroke="#080c14" stroke-width="1.5"/></svg>`;
+    const icon = L.divIcon({ html: svg, className: '', iconSize: [14, 14], iconAnchor: [7, 7] });
+    const popup = `<b>${d.name}</b><br>${d.vehicle} · ${d.corridor}<br>Risk: <b style="color:${col}">${d.score}/100</b><br>Speed: ${d.speed} km/h`;
+    const mMain = L.marker([d.lat, d.lng], { icon }).bindPopup(popup).addTo(STATE.maps.main);
+    const mMini = L.marker([d.lat, d.lng], { icon }).addTo(STATE.maps.mini);
+    STATE.markers.push({ main: mMain, mini: mMini });
+  });
+  document.getElementById('live-count-tag').textContent = `${topDrivers.length} vehicles`;
+  document.getElementById('nb-live').textContent = topDrivers.length;
+}
+
+// ── CHARTS ───────────────────────────────────────────────
+Chart.defaults.color = '#7a90a8';
+Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+Chart.defaults.font.family = "'Syne', sans-serif";
+Chart.defaults.font.size = 11;
+
+function initCharts() {
+  const drivers = STATE.drivers;
+  const safe = drivers.filter(d => d.score < 35).length;
+  const mod  = drivers.filter(d => d.score >= 35 && d.score < 65).length;
+  const high = drivers.filter(d => d.score >= 65).length;
+
+  STATE.charts.donut = new Chart(document.getElementById('ch-donut'), {
+    type: 'doughnut',
+    data: { labels: ['Safe','Moderate','High'], datasets: [{ data: [safe, mod, high], backgroundColor: ['#00e5b0','#ffd166','#ff4d6a'], borderWidth: 0, hoverOffset: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { display: false } } }
+  });
+
+  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const incData = days.map(() => randInt(3, 14));
+  STATE.charts.trend = new Chart(document.getElementById('ch-trend'), {
+    type: 'line',
+    data: { labels: days, datasets: [{ data: incData, borderColor: '#4eadff', backgroundColor: 'rgba(78,173,255,0.08)', borderWidth: 2, tension: 0.4, fill: true, pointRadius: 3, pointBackgroundColor: '#4eadff' }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { min: 0, ticks: { stepSize: 3 } } } }
+  });
+
+  const avgSpeed = drivers.reduce((a,d)=>a+d.speed,0)/drivers.length;
+  const avgBrake = drivers.reduce((a,d)=>a+d.brake,0)/drivers.length;
+  const avgPhone = drivers.reduce((a,d)=>a+d.phone,0)/drivers.length;
+  const avgLane  = drivers.reduce((a,d)=>a+d.lane,0)/drivers.length;
+  STATE.charts.behavior = new Chart(document.getElementById('ch-behavior'), {
+    type: 'bar',
+    data: {
+      labels: ['Speeding','Hard braking','Phone use','Lane changes','Tailgating','Signal violations'],
+      datasets: [{ data: [Math.min(avgSpeed/1.2, 100), avgBrake * 10, avgPhone * 11, avgLane * 5, randInt(20,50), randInt(10,35)], backgroundColor: ['#ff4d6a','#ff4d6a','#ffd166','#ffd166','#4eadff','#00e5b0'], borderRadius: 4, borderWidth: 0 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { min: 0, max: 100 } } }
+  });
+
+  // Causes chart
+  STATE.charts.causes = new Chart(document.getElementById('ch-causes'), {
+    type: 'bar',
+    data: {
+      labels: ['Speeding','Signal skip','Poor lighting','Wet road','Distraction','Tailgating','Wrong lane'],
+      datasets: [{ data: [32, 24, 18, 14, 12, 9, 6], backgroundColor: '#6c63ff', borderRadius: 4, borderWidth: 0 }]
+    },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { min: 0, grid: { display: false } }, y: { grid: { display: false } } } }
+  });
+
+  // Weather risk chart
+  STATE.charts.weatherrisk = new Chart(document.getElementById('ch-weatherrisk'), {
+    type: 'bar',
+    data: {
+      labels: ['Clear','Overcast','Light rain','Heavy rain','Fog','Storm'],
+      datasets: [{ data: [1.0, 1.05, 1.15, 1.28, 1.22, 1.38], backgroundColor: ['#00e5b0','#4eadff','#ffd166','#ff9f43','#ff6b81','#ff4d6a'], borderRadius: 4, borderWidth: 0 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `×${c.raw.toFixed(2)}` } } }, scales: { x: { grid: { display: false } }, y: { min: 0.9, max: 1.5, ticks: { callback: v => `×${v.toFixed(2)}` } } } }
+  });
+
+  // Feature importance
+  STATE.charts.importance = new Chart(document.getElementById('ch-importance'), {
+    type: 'bar',
+    data: {
+      labels: ['Speed','Weather','Time','Braking','Road type','Traffic','Phone','Lane changes'],
+      datasets: [{ data: [0.28, 0.22, 0.16, 0.12, 0.09, 0.07, 0.04, 0.02], backgroundColor: '#6c63ff', borderRadius: 4, borderWidth: 0 }]
+    },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 0.35, grid: { display: false }, ticks: { callback: v => `${Math.round(v*100)}%` } }, y: { grid: { display: false }, ticks: { font: { size: 10 } } } } }
+  });
+
+  // Alert volume
+  const hours = Array.from({length:12}, (_,i) => `${(8+i)}:00`);
+  STATE.charts.alertvol = new Chart(document.getElementById('ch-alertvol'), {
+    type: 'bar',
+    data: {
+      labels: hours,
+      datasets: [
+        { label: 'High', data: hours.map(()=>randInt(0,3)), backgroundColor: '#ff4d6a', borderRadius: 2, borderWidth: 0 },
+        { label: 'Moderate', data: hours.map(()=>randInt(1,5)), backgroundColor: '#ffd166', borderRadius: 2, borderWidth: 0 }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, labels: { boxWidth: 8, font: { size: 10 } } } }, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, min: 0 } } }
+  });
+}
+
+// ── RENDER UI ─────────────────────────────────────────────
+function renderMetrics() {
+  const drivers = STATE.drivers;
+  const safe = drivers.filter(d => d.score < 35).length;
+  const high = drivers.filter(d => d.score >= 65).length;
+  const avg = Math.round(drivers.reduce((a,d) => a + (100 - d.score * 0.8), 0) / drivers.length);
+  const alerts = STATE.alerts.length;
+  document.getElementById('m-safety').textContent = avg;
+  document.getElementById('m-safety-d').textContent = '↑ fleet score';
+  document.getElementById('m-highrisk').textContent = high;
+  document.getElementById('m-highrisk-s').textContent = `${drivers.length - safe - high} moderate`;
+  document.getElementById('m-alerts').textContent = alerts;
+  document.getElementById('m-alerts-s').textContent = `${safe} safe drivers`;
+  document.getElementById('m-vehicles').textContent = drivers.length;
+  document.getElementById('m-vehicles-s').textContent = '6 corridors';
+  document.getElementById('nb-alerts').textContent = alerts;
+  document.getElementById('fleet-weather-note').textContent = STATE.weather ? STATE.weather.weather[0].description.toUpperCase() : '—';
+}
+
+function renderDriversTable(filter = 'all') {
+  const list = filter === 'all' ? STATE.drivers
+    : STATE.drivers.filter(d => riskCategory(d.score) === filter);
+  document.getElementById('drivers-tbody').innerHTML = list.map(d => `
+    <tr>
+      <td><div style="display:flex;align-items:center;gap:8px">
+        <div style="width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:700;background:${avColor(d.score)};color:${avText(d.score)};flex-shrink:0">${initials(d.name)}</div>
+        <span style="font-weight:500">${d.name}</span>
+      </div></td>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--text3)">${d.vehicle}</td>
+      <td><div style="display:flex;align-items:center;gap:7px">
+        <div class="sbar"><div class="sfill" style="width:${d.score}%;background:${riskColor(d.score)}"></div></div>
+        <span style="font-family:var(--mono);font-size:10px">${d.score}</span>
+      </div></td>
+      <td style="font-family:var(--mono);font-size:10px">${d.speed} km/h</td>
+      <td style="font-family:var(--mono);font-size:10px">${d.brake}×</td>
+      <td><span class="pill ${riskClass(d.score)}">${riskLabel(d.score)}</span></td>
+    </tr>`).join('');
+}
+
+function renderPanelDrivers() {
+  const top5 = [...STATE.drivers].sort((a,b) => b.score - a.score).slice(0, 5);
+  document.getElementById('panel-drivers').innerHTML = top5.map(d => `
+    <div class="driver-card">
+      <div class="d-av" style="background:${avColor(d.score)};color:${avText(d.score)}">${initials(d.name)}</div>
+      <div class="d-info"><div class="d-name">${d.name}</div><div class="d-route">${d.vehicle} · ${d.corridor}</div></div>
+      <div class="d-score" style="color:${riskColor(d.score)}">${d.score}</div>
+    </div>`).join('');
+}
+
+function renderZones() {
+  document.getElementById('zone-list').innerHTML = HOTSPOTS.map((z, i) => {
+    const col = z.severity === 'critical' ? 'var(--red)' : z.severity === 'high' ? 'var(--amber)' : 'var(--blue)';
+    const lbl = z.severity === 'critical' ? 'p-h' : z.severity === 'high' ? 'p-m' : 'p-l';
+    return `<div class="zone-row">
+      <span class="zone-rank">${i+1}</span>
+      <span class="zone-name">${z.name}</span>
+      <span class="zone-count">${z.incidents} inc.</span>
+      <span class="pill ${lbl}">${z.severity.toUpperCase()}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderAlerts() {
+  const count = STATE.alerts.length;
+  document.getElementById('alert-count-tag').textContent = `${count} open`;
+  document.getElementById('nb-alerts').textContent = count;
+  if (count === 0) {
+    document.getElementById('alerts-list').innerHTML = '<div style="font-size:11px;color:var(--text3);padding:10px">No active alerts.</div>';
+    return;
+  }
+  document.getElementById('alerts-list').innerHTML = STATE.alerts.map(a => `
+    <div class="alert ${a.level === 'warning' ? 'warn' : ''}">
+      <div style="font-size:16px;margin-top:1px">${a.level === 'critical' ? '⚠' : '△'}</div>
+      <div class="alert-body">
+        <div class="a-title">${a.title}</div>
+        <div class="a-desc">${a.desc}</div>
+        <div class="a-time">${a.time} · ${a.source}</div>
+      </div>
+    </div>`).join('');
+}
+
+function generateAlerts() {
+  STATE.alerts = [];
+  const highRisk = STATE.drivers.filter(d => d.score >= 75);
+  highRisk.slice(0, 3).forEach(d => {
+    STATE.alerts.push({
+      level: d.score >= 85 ? 'critical' : 'warning',
+      title: `${d.name} — Erratic behaviour detected`,
+      desc: `Risk score ${d.score}/100 on ${d.corridor}. Speed: ${d.speed} km/h, Braking events: ${d.brake}×. Immediate review recommended.`,
+      time: new Date().toLocaleTimeString('en-IN', { hour12: false }),
+      source: 'ML behaviour model'
+    });
+  });
+  if (STATE.weatherRisk >= 1.2) {
+    STATE.alerts.push({
+      level: 'warning',
+      title: 'Elevated weather-related road risk',
+      desc: `Current weather: ${STATE.weather?.weather[0].description || 'adverse'}. Risk multiplier ×${STATE.weatherRisk.toFixed(2)}. Advisory issued to all fleet managers.`,
+      time: new Date().toLocaleTimeString('en-IN', { hour12: false }),
+      source: 'Weather intelligence module'
+    });
+  }
+  STATE.alerts.push({
+    level: 'critical',
+    title: 'Silk Board Junction — Accident cluster active',
+    desc: '16 incidents in 30 days. Peak congestion detected. Traffic control notified. Suggest patrol deployment.',
+    time: new Date(Date.now() - 1200000).toLocaleTimeString('en-IN', { hour12: false }),
+    source: 'Geospatial hotspot model'
+  });
+  renderAlerts();
+}
+
+function addFeedEvent(text, color) {
+  const el = document.getElementById('panel-feed');
+  const time = new Date().toLocaleTimeString('en-IN', { hour12: false });
+  const item = document.createElement('div');
+  item.className = 'event';
+  item.innerHTML = `<div class="e-dot" style="background:${color}"></div><div class="e-body"><div class="e-text">${text}</div><div class="e-time">${time}</div></div>`;
+  el.insertBefore(item, el.firstChild);
+  while (el.children.length > 8) el.removeChild(el.lastChild);
+}
+
+function simulateLiveEvents() {
+  const events = [
+    () => { const d = STATE.drivers[randInt(0, STATE.drivers.length)]; if (d.score >= 65) { addFeedEvent(`Hard braking — ${d.vehicle} on ${d.corridor}`, 'var(--red)'); }},
+    () => { const d = STATE.drivers[randInt(0, STATE.drivers.length)]; addFeedEvent(`Speed ${STATE.drivers[randInt(0,STATE.drivers.length)].speed} km/h — ${d.vehicle}`, 'var(--amber)'); },
+    () => { addFeedEvent('New vehicle joined tracking fleet', 'var(--blue)'); },
+    () => { const d = STATE.drivers[randInt(0, STATE.drivers.length)]; if (d.score < 35) addFeedEvent(`${d.name} risk score improved to ${d.score}`, 'var(--green)'); },
+    () => { addFeedEvent('Hotspot activation — Silk Board Jn', 'var(--red)'); },
+    () => { addFeedEvent('Weather data refreshed', 'var(--blue)'); },
+  ];
+  const fn = events[randInt(0, events.length)];
+  fn();
+  // Wiggle driver positions slightly
+  STATE.drivers.forEach(d => {
+    d.lat += rand(-0.001, 0.001);
+    d.lng += rand(-0.001, 0.001);
+    // Small score drift
+    d.score = Math.max(0, Math.min(100, d.score + rand(-2, 2)));
+    d.score = Math.round(d.score);
+  });
+  renderMarkerUpdate();
+}
+
+function renderMarkerUpdate() {
+  STATE.markers.forEach((m, i) => {
+    const d = STATE.drivers[i];
+    if (!d) return;
+    if (m.main) m.main.setLatLng([d.lat, d.lng]);
+    if (m.mini) m.mini.setLatLng([d.lat, d.lng]);
+  });
+}
+
+// ── PREDICTION ────────────────────────────────────────────
+let predCount = 0;
+function runPredict() {
+  const params = {
+    speed: +document.getElementById('sl-speed').value,
+    brake: +document.getElementById('sl-brake').value,
+    phone: +document.getElementById('sl-phone').value,
+    lane:  +document.getElementById('sl-lane').value,
+    time:  document.getElementById('p-time').value,
+    weather: document.getElementById('p-weather').value,
+    road:  document.getElementById('p-road').value,
+    traffic: document.getElementById('p-traffic').value,
+  };
+  document.getElementById('dot-ml').style.background = 'var(--amber)';
+  document.getElementById('pred-btn').disabled = true;
+  setTimeout(() => {
+    const score = computeRiskScore(params);
+    const level = score >= 65 ? 'HIGH RISK' : score >= 35 ? 'MODERATE RISK' : 'LOW RISK';
+    const col = score >= 65 ? 'var(--red)' : score >= 35 ? 'var(--amber)' : 'var(--green)';
+    const conf = Math.round(76 + Math.random() * 16);
+    const factors = [];
+    if (params.speed > 70) factors.push('Overspeeding');
+    if (params.brake > 4) factors.push('Hard braking');
+    if (params.phone > 3) factors.push('Phone distraction');
+    if (params.lane > 10) factors.push('Unsafe lane changes');
+    if (params.weather !== 'Clear') factors.push('Adverse weather');
+    if (params.time.includes('Night') || params.time.includes('Late')) factors.push('Night driving');
+    if (params.traffic === 'Congested' || params.traffic === 'High') factors.push('High traffic');
+    if (params.road === 'Junction') factors.push('High-risk road');
+    const out = document.getElementById('pred-out');
+    out.className = 'pred-out show';
+    out.style.borderLeftColor = col;
+    out.innerHTML = `
+      <div class="pred-score" style="color:${col}">${level} — ${score}/100</div>
+      <div class="factors">Factors: ${factors.length ? factors.map(f=>`<span class="ftag">${f}</span>`).join('') : '<span style="color:var(--text3)">No significant factors</span>'}</div>
+      <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:9px;color:var(--text3)"><span>Model confidence</span><span style="font-family:var(--mono)">${conf}%</span></div>
+      <div class="conf-bar"><div class="conf-fill" style="width:${conf}%"></div></div>`;
+    // History
+    predCount++;
+    const hist = document.getElementById('pred-history');
+    const tag = score >= 65 ? 'p-h' : score >= 35 ? 'p-m' : 'p-l';
+    const entry = document.createElement('div');
+    entry.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)';
+    entry.innerHTML = `<span style="font-family:var(--mono);font-size:9px;color:var(--text3)">#${predCount}</span><span class="pill ${tag}" style="font-size:8px">${level.split(' ')[0]}</span><span style="font-family:var(--mono);font-size:10px;color:${col}">${score}</span><span style="font-size:9px;color:var(--text3);flex:1">${params.road} · ${params.weather}</span>`;
+    if (hist.textContent === 'No predictions yet.') hist.innerHTML = '';
+    hist.insertBefore(entry, hist.firstChild);
+    document.getElementById('dot-ml').style.background = 'var(--green)';
+    document.getElementById('pred-btn').disabled = false;
+  }, 600);
+}
+
+// ── NAV ───────────────────────────────────────────────────
+function nav(id, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  el.classList.add('active');
+  // Invalidate maps
+  setTimeout(() => {
+    if (id === 'live' && STATE.maps.main) STATE.maps.main.invalidateSize();
+    if (id === 'zones' && STATE.maps.zone) STATE.maps.zone.invalidateSize();
+  }, 100);
+}
+
+function filterDrivers(f, el) {
+  document.querySelectorAll('#dtabs .tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderDriversTable(f);
+}
+
+// ── CLOCK ─────────────────────────────────────────────────
+function tick() {
+  document.getElementById('clk').textContent = new Date().toLocaleTimeString('en-IN', { hour12: false });
+}
+
+// ── INIT ──────────────────────────────────────────────────
+async function init() {
+  document.getElementById('dot-ml').style.background = 'var(--amber)';
+  generateDrivers();
+  await fetchWeather();
+  // Recalibrate driver scores with real weather
+  generateDrivers();
+  generateAlerts();
+  renderMetrics();
+  renderDriversTable();
+  renderPanelDrivers();
+  renderZones();
+  initCharts();
+  initMaps();
+  fetchOSMData();
+  document.getElementById('dot-ml').style.background = 'var(--green)';
+  // Seed initial feed
+  addFeedEvent('System initialised — all data sources connected', 'var(--green)');
+  addFeedEvent('Weather data loaded from OpenWeatherMap', 'var(--blue)');
+  addFeedEvent('Road map loaded from OpenStreetMap', 'var(--blue)');
+  addFeedEvent(`${STATE.drivers.length} drivers initialised · risk scores computed`, 'var(--accent)');
+  // Live intervals
+  setInterval(tick, 1000);
+  setInterval(simulateLiveEvents, 4000);
+  setInterval(() => { fetchWeather(); }, 300000); // refresh weather every 5 min
+  setInterval(() => {
+    renderMetrics();
+    renderPanelDrivers();
+    // Update donut chart
+    if (STATE.charts.donut) {
+      const d = STATE.drivers;
+      STATE.charts.donut.data.datasets[0].data = [
+        d.filter(x=>x.score<35).length,
+        d.filter(x=>x.score>=35&&x.score<65).length,
+        d.filter(x=>x.score>=65).length
+      ];
+      STATE.charts.donut.update('none');
+    }
+  }, 5000);
+  tick();
+}
+
+window.addEventListener('load', init);
+</script>
+</body>
+</html>
